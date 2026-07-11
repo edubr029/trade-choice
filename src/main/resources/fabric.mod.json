@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"id": "trade-choice",
+	"version": "${version}",
+	"name": "Trade Choice",
+	"description": "Mark desired villager trades and get audio alerts when they appear.",
+	"authors": [
+		"edu"
+	],
+	"contact": {
+		"sources": "https://github.com/edu/trade-choice"
+	},
+	"license": "MIT",
+	"icon": "assets/trade-choice/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.tradechoice.TradeChoiceMod"
+		],
+		"client": [
+			"com.tradechoice.client.TradeChoiceClient"
+		]
+	},
+	"mixins": [
+		"trade-choice.mixins.json",
+		{
+			"config": "trade-choice.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"trade_cycling": "*"
+	}
+}
