@@ -9,8 +9,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -38,6 +41,8 @@ public class TradeWishlistScreen extends Screen {
 	private final MerchantScreen parent;
 	private final String professionKey;
 	private final List<WantedTrade> entries = new ArrayList<>();
+	private boolean unavailable = false;
+	private String unavailableReason = null;
 	private int page = 0;
 
 	public TradeWishlistScreen(MerchantScreen parent, String professionKey) {
@@ -115,6 +120,19 @@ public class TradeWishlistScreen extends Screen {
 		g.centeredText(font, this.title, width / 2, 18, 0xFFFFD700);
 		// Subtitle with profession name.
 		g.centeredText(font, Component.literal(prettyProfessionName()), width / 2, 32, 0xFFCCCCCC);
+		if (unavailable) {
+			g.centeredText(
+				font,
+				Component.literal(unavailableReason == null ? "Unavailable." : unavailableReason),
+				width / 2, height / 2 - 10, 0xFFFF5555
+			);
+		} else if (entries.isEmpty()) {
+			g.centeredText(
+				font,
+				Component.literal("No trades enumerated for this profession."),
+				width / 2, height / 2 - 10, 0xFFAAAAAA
+			);
+		}
 	}
 
 	@Override
@@ -127,32 +145,69 @@ public class TradeWishlistScreen extends Screen {
 		return true;
 	}
 
-	/** Populate entries from the TRADE_SET registry for this profession. */
+	/**
+	 * Populate entries from the TRADE_SET registry for this profession.
+	 * TRADE_SET is worldgen-scoped: it is NOT in the client-side
+	 * {@code mc.level.registryAccess()} (which only contains sync'd registries).
+	 * On integrated single-player the local {@link IntegratedServer} shares our
+	 * process and exposes the full worldgen registries via
+	 * {@code server.registryAccess()}; remote/dedicated servers do not, so we
+	 * surface a fallback message inside the panel instead of crashing.
+	 */
 	private void buildEntries() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.level == null) return;
 		if (professionKey == null) return;
 
-		// Find the profession registry entry.
-		Optional<Holder.Reference<VillagerProfession>> profOpt = mc.level.registryAccess()
-			.lookupOrThrow(Registries.VILLAGER_PROFESSION)
-			.get(Identifier.tryParse(professionKey));
+		RegistryAccess regAccess = null;
+		if (mc.hasSingleplayerServer()) {
+			IntegratedServer server = mc.getSingleplayerServer();
+			if (server != null) regAccess = server.registryAccess();
+		}
+		if (regAccess == null) {
+			regAccess = mc.level.registryAccess();
+		}
+		if (regAccess == null) {
+			unavailable = true;
+			unavailableReason = "No registry access available.";
+			return;
+		}
+
+		Optional<Holder.Reference<VillagerProfession>> profOpt;
+		try {
+			profOpt = regAccess.lookupOrThrow(Registries.VILLAGER_PROFESSION)
+				.get(Identifier.tryParse(professionKey));
+		} catch (IllegalStateException e) {
+			TradeChoiceMod.LOGGER.warn("[trade-choice] VILLAGER_PROFESSION registry unavailable", e);
+			unavailable = true;
+			unavailableReason = "Profession registry not available on this server.";
+			return;
+		}
 		if (profOpt.isEmpty()) {
 			TradeChoiceMod.LOGGER.warn("[trade-choice] No villager profession found for key {}", professionKey);
+			unavailable = true;
+			unavailableReason = "Unknown profession: " + professionKey;
 			return;
 		}
 		VillagerProfession prof = profOpt.get().value();
 
-		// Lazy-load tradeable enchantments if we encounter an enchanted_book trade.
+		Registry<TradeSet> tradeSetRegistry;
+		try {
+			tradeSetRegistry = regAccess.lookupOrThrow(Registries.TRADE_SET);
+		} catch (IllegalStateException e) {
+			TradeChoiceMod.LOGGER.warn("[trade-choice] TRADE_SET registry unavailable on this client", e);
+			unavailable = true;
+			unavailableReason = "Trade list registry not available on this server. Open the wishlist on a single-player world.";
+			return;
+		}
+
+		Registry<Enchantment> enchantRegistry = null;
 		HolderSet.Named<Enchantment> tradeableEnchants = null;
 
-		// For each level 1..5, fetch the TradeSet and iterate its trades.
 		for (int level = 1; level <= 5; level++) {
 			ResourceKey<TradeSet> setKey = prof.getTrades(level);
 			if (setKey == null) continue;
-			Optional<TradeSet> setOpt = mc.level.registryAccess()
-				.lookupOrThrow(Registries.TRADE_SET)
-				.getOptional(setKey);
+			Optional<TradeSet> setOpt = tradeSetRegistry.getOptional(setKey);
 			if (setOpt.isEmpty()) continue;
 			TradeSet tradeSet = setOpt.get();
 			HolderSet<VillagerTrade> trades = tradeSet.getTrades();
@@ -166,10 +221,18 @@ public class TradeWishlistScreen extends Screen {
 					.orElse(Identifier.withDefaultNamespace("unknown"));
 
 				if (item == Items.ENCHANTED_BOOK) {
+					if (enchantRegistry == null) {
+						try {
+							enchantRegistry = regAccess.lookupOrThrow(Registries.ENCHANTMENT);
+						} catch (IllegalStateException e) {
+							TradeChoiceMod.LOGGER.warn("[trade-choice] ENCHANTMENT registry unavailable; listing enchanted_book generically", e);
+							WantedTrade w = new WantedTrade(professionKey, itemId.toString(), null, 0);
+							if (!entries.contains(w)) entries.add(w);
+							continue;
+						}
+					}
 					if (tradeableEnchants == null) {
-						tradeableEnchants = mc.level.registryAccess()
-							.lookupOrThrow(Registries.ENCHANTMENT)
-							.getOrThrow(EnchantmentTags.TRADEABLE);
+						tradeableEnchants = enchantRegistry.getOrThrow(EnchantmentTags.TRADEABLE);
 					}
 					for (Holder<Enchantment> e : tradeableEnchants) {
 						String enchId = e.unwrapKey()
