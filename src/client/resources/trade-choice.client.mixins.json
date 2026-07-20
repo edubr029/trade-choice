@@ -2,7 +2,10 @@
 	"required": true,
 	"package": "com.tradechoice.client.mixin",
 	"compatibilityLevel": "JAVA_25",
-	"client": [],
+	"client": [
+		"MerchantScreenMixin",
+		"ClientPacketListenerMixin"
+	],
 	"injectors": {
 		"defaultRequire": 1
 	}
