@@ -93,13 +93,6 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 		}
 	}
 
-	@Inject(method = "containerTick", at = @At("TAIL"))
-	private void tradeChoice$onTick(CallbackInfo ci) {
-		if (tradeChoice$profession == null) return;
-		MerchantOffers offers = getMenu().getOffers();
-		TradeChoiceClient.getAlertManager().checkAndAlert(offers, tradeChoice$profession);
-	}
-
 	@Unique
 	private String tradeChoice$detectProfession() {
 		Minecraft mc = Minecraft.getInstance();
