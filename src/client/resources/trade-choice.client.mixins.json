@@ -1,12 +1,13 @@
 {
-	"required": true,
-	"package": "com.tradechoice.client.mixin",
-	"compatibilityLevel": "JAVA_25",
-	"client": [
-		"MerchantScreenMixin",
-		"ClientPacketListenerMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	}
+  "required": true,
+  "package": "com.tradechoice.client.mixin",
+  "compatibilityLevel": "JAVA_4",
+  "client": [
+    "ClientPacketListenerMixin",
+    "MerchantScreenMixin",
+    "VillagerTradeAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

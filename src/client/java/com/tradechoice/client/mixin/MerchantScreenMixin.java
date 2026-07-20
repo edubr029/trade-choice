@@ -46,6 +46,18 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 			MerchantOffers offers = getMenu().getOffers();
 			TradeChoiceClient.getAlertManager().onScreenOpen();
 			TradeChoiceClient.getAlertManager().checkAndAlert(offers, tradeChoice$profession);
+
+			addRenderableWidget(
+				net.minecraft.client.gui.components.Button.builder(
+					Component.literal("\u2605 Wanted"),
+					btn -> Minecraft.getInstance().setScreenAndShow(
+						new com.tradechoice.client.gui.TradeWishlistScreen(
+							(MerchantScreen) (Object) this,
+							tradeChoice$profession
+						)
+					)
+				).bounds(leftPos + imageWidth - 80, topPos - 22, 80, 20).build()
+			);
 		}
 	}
 

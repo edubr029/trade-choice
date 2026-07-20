@@ -87,7 +87,7 @@ public class TradeAlertManager {
 			EnchantmentUtil.EnchantmentInfo info = EnchantmentUtil.getFirstStoredEnchantment(stack);
 			if (info == null) return false;
 			if (!wanted.getEnchantmentId().equals(info.id())) return false;
-			if (wanted.getEnchantmentLevel() != info.level()) return false;
+			if (wanted.getEnchantmentLevel() != 0 && wanted.getEnchantmentLevel() != info.level()) return false;
 		}
 		return true;
 	}
