@@ -83,22 +83,22 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 					).bounds(autoX, y, autoW, h).build();
 					tradeChoice$applyAutoSearchButtonState(driver, false);
 					addRenderableWidget(tradeChoice$autoSearchButton);
-				}
 
-				SpriteIconButton wantedButton = SpriteIconButton.builder(
-					Component.literal("Wanted"),
-					btn -> Minecraft.getInstance().setScreenAndShow(
-						new com.tradechoice.client.gui.TradeWishlistScreen(
-							(MerchantScreen) (Object) this,
-							tradeChoice$profession
-						)
-					),
-					true
-				).size(wantedW, h)
-				 .sprite(Identifier.fromNamespaceAndPath("minecraft", "icon/search"), 12, 12)
-				 .build();
-				wantedButton.setPosition(wantedX, y);
-				addRenderableWidget(wantedButton);
+					SpriteIconButton wantedButton = SpriteIconButton.builder(
+						Component.literal("Wanted"),
+						btn -> Minecraft.getInstance().setScreenAndShow(
+							new com.tradechoice.client.gui.TradeWishlistScreen(
+								(MerchantScreen) (Object) this,
+								tradeChoice$profession
+							)
+						),
+						true
+					).size(wantedW, h)
+					 .sprite(Identifier.fromNamespaceAndPath("minecraft", "icon/search"), 12, 12)
+					 .build();
+					wantedButton.setPosition(wantedX, y);
+					addRenderableWidget(wantedButton);
+				}
 			}
 		}
 	}
