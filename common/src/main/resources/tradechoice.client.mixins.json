@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "package": "com.tradechoice.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["HelloMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

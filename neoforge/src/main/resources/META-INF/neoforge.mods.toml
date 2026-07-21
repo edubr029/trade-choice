@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="*"
+license="MIT"
+
+[[mods]]
+modId="tradechoice"
+version="${version}"
+displayName="Trade Choice"
+description="Phase 0 multi-loader scaffold verification jar."
+
+[[mixins]]
+config = "tradechoice.client.mixins.json"
+
+[[dependencies.tradechoice]]
+    modId="neoforge"
+    type="required"
+    versionRange="[26.2.0.0-beta,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.tradechoice]]
+    modId="minecraft"
+    type="required"
+    versionRange="[26.2,26.3)"
+    ordering="NONE"
+    side="BOTH"
