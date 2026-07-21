@@ -380,13 +380,13 @@ public class TradeWishlistScreen extends Screen {
 			profOpt = regAccess.lookupOrThrow(Registries.VILLAGER_PROFESSION)
 				.get(Identifier.tryParse(professionKey));
 		} catch (IllegalStateException e) {
-			TradeChoiceMod.LOGGER.warn("[trade-choice] VILLAGER_PROFESSION registry unavailable", e);
+			TradeChoiceMod.LOGGER.warn("[tradechoice] VILLAGER_PROFESSION registry unavailable", e);
 			unavailable = true;
 			unavailableReason = "Profession registry not available on this server.";
 			return;
 		}
 		if (profOpt.isEmpty()) {
-			TradeChoiceMod.LOGGER.warn("[trade-choice] No villager profession found for key {}", professionKey);
+			TradeChoiceMod.LOGGER.warn("[tradechoice] No villager profession found for key {}", professionKey);
 			unavailable = true;
 			unavailableReason = "Unknown profession: " + professionKey;
 			return;
@@ -397,7 +397,7 @@ public class TradeWishlistScreen extends Screen {
 		try {
 			tradeSetRegistry = regAccess.lookupOrThrow(Registries.TRADE_SET);
 		} catch (IllegalStateException e) {
-			TradeChoiceMod.LOGGER.warn("[trade-choice] TRADE_SET registry unavailable on this client", e);
+			TradeChoiceMod.LOGGER.warn("[tradechoice] TRADE_SET registry unavailable on this client", e);
 			unavailable = true;
 			unavailableReason = "Trade list registry not available on this server. Open the wishlist on a single-player world.";
 			return;
@@ -427,7 +427,7 @@ public class TradeWishlistScreen extends Screen {
 						try {
 							enchantRegistry = regAccess.lookupOrThrow(Registries.ENCHANTMENT);
 						} catch (IllegalStateException e) {
-							TradeChoiceMod.LOGGER.warn("[trade-choice] ENCHANTMENT registry unavailable; listing enchanted_book generically", e);
+							TradeChoiceMod.LOGGER.warn("[tradechoice] ENCHANTMENT registry unavailable; listing enchanted_book generically", e);
 							WantedTrade w = new WantedTrade(professionKey, itemId.toString(), null, 0);
 							if (!entries.contains(w)) {
 								entries.add(w);

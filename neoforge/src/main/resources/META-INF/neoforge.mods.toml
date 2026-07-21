@@ -6,7 +6,7 @@ license="MIT"
 modId="tradechoice"
 version="${version}"
 displayName="Trade Choice"
-description="Phase 0 multi-loader scaffold verification jar."
+description="Mark desired villager trades and get audio alerts when they appear. Optional: install the Trade Cycling mod for auto-search."
 
 [[mixins]]
 config = "tradechoice.client.mixins.json"
@@ -24,3 +24,10 @@ config = "tradechoice.client.mixins.json"
     versionRange="[26.2,26.3)"
     ordering="NONE"
     side="BOTH"
+
+[[dependencies.tradechoice]]
+    modId="trade_cycling"
+    type="optional"
+    versionRange="*"
+    ordering="NONE"
+    side="CLIENT"

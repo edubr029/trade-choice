@@ -29,7 +29,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.tradechoice.client.cycling.AutoSearchDriver;
-import net.fabricmc.loader.api.FabricLoader;
+import com.tradechoice.client.platform.Platforms;
 
 import java.util.List;
 import java.util.Optional;
@@ -161,7 +161,7 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 	private void tradeChoice$applyAutoSearchButtonState(AutoSearchDriver driver, boolean recheckOnChange) {
 		if (tradeChoice$autoSearchButton == null) return;
 
-		boolean tradeCyclingLoaded = FabricLoader.getInstance().isModLoaded("trade_cycling");
+		boolean tradeCyclingLoaded = Platforms.get().isModLoaded("trade_cycling");
 		boolean running = driver.isRunning();
 		boolean hasWanted = !TradeChoiceClient.getConfig()
 				.getChoicesForProfession(tradeChoice$profession).isEmpty();

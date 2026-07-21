@@ -3,7 +3,7 @@ package com.tradechoice.client.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.tradechoice.TradeChoiceMod;
-import net.fabricmc.loader.api.FabricLoader;
+import com.tradechoice.client.platform.Platforms;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -17,34 +17,35 @@ import java.util.Objects;
 public class TradeChoiceConfig {
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("trade-choice");
-	private static final Path CONFIG_FILE = CONFIG_DIR.resolve("choices.json");
+
+	private final Path configDir = Platforms.get().getConfigDir().resolve("tradechoice");
+	private final Path configFile = configDir.resolve("choices.json");
 
 	private final List<WantedTrade> choices = new ArrayList<>();
 
 	public void load() {
-		if (!Files.exists(CONFIG_FILE)) return;
-		try (Reader reader = Files.newBufferedReader(CONFIG_FILE)) {
+		if (!Files.exists(configFile)) return;
+		try (Reader reader = Files.newBufferedReader(configFile)) {
 			ConfigData data = GSON.fromJson(reader, ConfigData.class);
 			if (data != null && data.choices != null) {
 				choices.clear();
 				choices.addAll(data.choices);
 			}
 		} catch (Exception e) {
-			TradeChoiceMod.LOGGER.error("[trade-choice] Failed to load config", e);
+			TradeChoiceMod.LOGGER.error("[tradechoice] Failed to load config", e);
 		}
 	}
 
 	public void save() {
 		try {
-			Files.createDirectories(CONFIG_DIR);
+			Files.createDirectories(configDir);
 			ConfigData data = new ConfigData();
 			data.choices = new ArrayList<>(choices);
-			try (Writer writer = Files.newBufferedWriter(CONFIG_FILE)) {
+			try (Writer writer = Files.newBufferedWriter(configFile)) {
 				GSON.toJson(data, writer);
 			}
 		} catch (Exception e) {
-			TradeChoiceMod.LOGGER.error("[trade-choice] Failed to save config", e);
+			TradeChoiceMod.LOGGER.error("[tradechoice] Failed to save config", e);
 		}
 	}
 
@@ -99,7 +100,7 @@ public class TradeChoiceConfig {
 					.toList();
 			if (!existing.isEmpty()) {
 				TradeChoiceMod.LOGGER.info(
-						"[trade-choice] Replacing {} existing mark(s) for profession={} with new mark on item={}",
+						"[tradechoice] Replacing {} existing mark(s) for profession={} with new mark on item={}",
 						existing.size(), trade.getProfession(), trade.getItemId());
 				choices.removeAll(existing);
 			}

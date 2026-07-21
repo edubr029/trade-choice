@@ -43,7 +43,7 @@ public class ClientPacketListenerMixin {
 		if (!AutoSearchDriver.getInstance().isRunning()) return;
 		Minecraft mc = Minecraft.getInstance();
 		TradeChoiceMod.LOGGER.warn(
-				"[trade-choice] Auto-search: ClientboundContainerClosePacket received while running; screen={}",
+				"[tradechoice] Auto-search: ClientboundContainerClosePacket received while running; screen={}",
 				mc.gui.screen());
 	}
 
