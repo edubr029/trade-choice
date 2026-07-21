@@ -3,8 +3,12 @@
   "id": "tradechoice",
   "version": "${version}",
   "name": "Trade Choice",
-  "description": "Multi-loader Fabric + NeoForge mod for marking and alerting on desired villager trades.",
-  "authors": ["edu"],
+  "description": "Mark wanted villager trades and get audio alerts when matching offers appear. Optional auto-search cycles villager trades until your wishlist items show up (requires Trade Cycling).",
+  "authors": ["edubr029"],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/trade-choice",
+    "sources": "https://github.com/edubr029/trade-choice"
+  },
   "license": "MIT",
   "environment": "client",
   "entrypoints": {

@@ -6,7 +6,10 @@ license="MIT"
 modId="tradechoice"
 version="${version}"
 displayName="Trade Choice"
-description="Mark desired villager trades and get audio alerts when they appear. Optional: install the Trade Cycling mod for auto-search."
+description="Mark wanted villager trades and get audio alerts when matching offers appear. Optional auto-search cycles villager trades until your wishlist items show up (requires Trade Cycling)."
+authors="edubr029"
+contact.homepage="https://modrinth.com/mod/trade-choice"
+contact.sources="https://github.com/edubr029/trade-choice"
 
 [[mixins]]
 config = "tradechoice.client.mixins.json"
