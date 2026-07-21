@@ -4,3 +4,7 @@ run/
 logs/
 *.log
 .idea/
+bin/
+.classpath
+.project
+.settings/

@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public class TradeChoiceConfig {
 
@@ -58,15 +59,57 @@ public class TradeChoiceConfig {
 	}
 
 	public boolean isMarked(WantedTrade trade) {
-		return choices.contains(trade);
+		return choices.stream().anyMatch(c -> wantedMatches(c, trade));
+	}
+
+	/**
+	 * Updates the level of the saved trade matching (profession, itemId, enchantmentId).
+	 * Returns false if no saved trade was found, or if the level is unchanged.
+	 */
+	public boolean updateLevelFor(String profession, String itemId, String enchantmentId, int newLevel) {
+		WantedTrade existing = choices.stream()
+				.filter(c -> Objects.equals(c.getProfession(), profession)
+						&& Objects.equals(c.getItemId(), itemId)
+						&& Objects.equals(c.getEnchantmentId(), enchantmentId))
+				.findFirst().orElse(null);
+		if (existing == null || existing.getEnchantmentLevel() == newLevel) {
+			return false;
+		}
+		choices.remove(existing);
+		choices.add(new WantedTrade(profession, itemId, enchantmentId, newLevel));
+		save();
+		return true;
+	}
+
+	private static boolean wantedMatches(WantedTrade saved, WantedTrade probe) {
+		if (!Objects.equals(saved.getProfession(), probe.getProfession())) return false;
+		if (!Objects.equals(saved.getItemId(), probe.getItemId())) return false;
+		if (!Objects.equals(saved.getEnchantmentId(), probe.getEnchantmentId())) return false;
+		int savedLvl = saved.getEnchantmentLevel();
+		int probeLvl = probe.getEnchantmentLevel();
+		return savedLvl == 0 || probeLvl == 0 || savedLvl == probeLvl;
 	}
 
 	public void toggle(WantedTrade trade) {
 		if (choices.contains(trade)) {
 			choices.remove(trade);
 		} else {
+			List<WantedTrade> existing = choices.stream()
+					.filter(c -> c.matchesProfession(trade.getProfession()))
+					.toList();
+			if (!existing.isEmpty()) {
+				TradeChoiceMod.LOGGER.info(
+						"[trade-choice] Replacing {} existing mark(s) for profession={} with new mark on item={}",
+						existing.size(), trade.getProfession(), trade.getItemId());
+				choices.removeAll(existing);
+			}
 			choices.add(trade);
 		}
+		save();
+	}
+
+	public void clearForProfession(String profession) {
+		choices.removeIf(c -> c.matchesProfession(profession));
 		save();
 	}
 

@@ -6,10 +6,15 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.SpriteIconButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerData;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.MerchantMenu;
@@ -23,6 +28,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import com.tradechoice.client.cycling.AutoSearchDriver;
+import net.fabricmc.loader.api.FabricLoader;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -35,29 +43,63 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 	@Unique
 	private String tradeChoice$profession;
 
+	@Unique
+	private Button tradeChoice$autoSearchButton;
+
 	private MerchantScreenMixin(MerchantMenu menu, Inventory inventory, Component title) {
 		super(menu, inventory, title);
 	}
 
 	@Inject(method = "init", at = @At("TAIL"))
 	private void tradeChoice$onInit(CallbackInfo ci) {
-		tradeChoice$profession = tradeChoice$detectProfession();
+		tradeChoice$autoSearchButton = null;
+		Villager villager = tradeChoice$findNearestVillager();
+		tradeChoice$profession = tradeChoice$professionOf(villager);
 		if (tradeChoice$profession != null) {
 			MerchantOffers offers = getMenu().getOffers();
 			TradeChoiceClient.getAlertManager().onScreenOpen();
 			TradeChoiceClient.getAlertManager().checkAndAlert(offers, tradeChoice$profession);
 
-			addRenderableWidget(
-				net.minecraft.client.gui.components.Button.builder(
-					Component.literal("\u2605 Wanted"),
+			if (villager != null) {
+				int autoW = 80;
+				int wantedW = 20;
+				int h = 20;
+				int y = topPos - 22;
+				int wantedX = leftPos + imageWidth - wantedW;
+
+				if (villager.getVillagerData().level() < VillagerData.MAX_VILLAGER_LEVEL) {
+					int autoX = wantedX - autoW - 4;
+
+					AutoSearchDriver driver = AutoSearchDriver.getInstance();
+					tradeChoice$autoSearchButton = Button.builder(
+						Component.literal(driver.isRunning() ? "Stop Search" : "Auto Search"),
+						btn -> {
+							if (driver.isRunning()) {
+								driver.stop("Stopped by user");
+							} else {
+								driver.start(tradeChoice$profession);
+							}
+						}
+					).bounds(autoX, y, autoW, h).build();
+					tradeChoice$applyAutoSearchButtonState(driver, false);
+					addRenderableWidget(tradeChoice$autoSearchButton);
+				}
+
+				SpriteIconButton wantedButton = SpriteIconButton.builder(
+					Component.literal("Wanted"),
 					btn -> Minecraft.getInstance().setScreenAndShow(
 						new com.tradechoice.client.gui.TradeWishlistScreen(
 							(MerchantScreen) (Object) this,
 							tradeChoice$profession
 						)
-					)
-				).bounds(leftPos + imageWidth - 80, topPos - 22, 80, 20).build()
-			);
+					),
+					true
+				).size(wantedW, h)
+				 .sprite(Identifier.fromNamespaceAndPath("minecraft", "icon/search"), 12, 12)
+				 .build();
+				wantedButton.setPosition(wantedX, y);
+				addRenderableWidget(wantedButton);
+			}
 		}
 	}
 
@@ -66,19 +108,29 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 		if (tradeChoice$profession == null) return;
 
 		MerchantOffers offers = getMenu().getOffers();
-		if (offers.isEmpty()) return;
+		if (!offers.isEmpty()) {
+			int visibleCount = Math.min(7, offers.size() - shopItem);
+			for (int i = 0; i < visibleCount; i++) {
+				int offerIndex = shopItem + i;
+				if (offerIndex >= offers.size()) break;
 
-		int visibleCount = Math.min(7, offers.size() - shopItem);
-		for (int i = 0; i < visibleCount; i++) {
-			int offerIndex = shopItem + i;
-			if (offerIndex >= offers.size()) break;
-
-			MerchantOffer offer = offers.get(offerIndex);
-			if (TradeChoiceClient.getAlertManager().isOfferMarked(offer, tradeChoice$profession)) {
-				int markerX = leftPos + 5 - 7;
-				int markerY = topPos + 18 + (i * 20) + 7;
-				graphics.fill(markerX, markerY, markerX + 5, markerY + 5, 0xFFFFD700);
+				MerchantOffer offer = offers.get(offerIndex);
+				if (TradeChoiceClient.getAlertManager().isOfferMarked(offer, tradeChoice$profession)) {
+					int markerX = leftPos + 5 - 7;
+					int markerY = topPos + 18 + (i * 20) + 7;
+					graphics.fill(markerX, markerY, markerX + 5, markerY + 5, 0xFFFFD700);
+				}
 			}
+		}
+
+		AutoSearchDriver driver = AutoSearchDriver.getInstance();
+
+		if (tradeChoice$autoSearchButton != null) {
+			String expected = driver.isRunning() ? "Stop Search" : "Auto Search";
+			if (!expected.equals(tradeChoice$autoSearchButton.getMessage().getString())) {
+				tradeChoice$autoSearchButton.setMessage(Component.literal(expected));
+			}
+			tradeChoice$applyAutoSearchButtonState(driver, true);
 		}
 	}
 
@@ -106,8 +158,39 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 	}
 
 	@Unique
-	private String tradeChoice$detectProfession() {
-		Minecraft mc = Minecraft.getInstance();
+	private void tradeChoice$applyAutoSearchButtonState(AutoSearchDriver driver, boolean recheckOnChange) {
+		if (tradeChoice$autoSearchButton == null) return;
+
+		boolean tradeCyclingLoaded = FabricLoader.getInstance().isModLoaded("trade_cycling");
+		boolean running = driver.isRunning();
+		boolean hasWanted = !TradeChoiceClient.getConfig()
+				.getChoicesForProfession(tradeChoice$profession).isEmpty();
+
+		boolean targetActive;
+		String tooltipMsg;
+		if (!tradeCyclingLoaded) {
+			targetActive = false;
+			tooltipMsg = "Install the Trade Cycling mod to auto search";
+		} else if (running || hasWanted) {
+			targetActive = true;
+			tooltipMsg = null;
+		} else {
+			targetActive = false;
+			tooltipMsg = "Mark a wanted trade first (shift-click any trade row)";
+		}
+
+		if (recheckOnChange && tradeChoice$autoSearchButton.active == targetActive) return;
+
+		tradeChoice$autoSearchButton.active = targetActive;
+		if (tooltipMsg == null) {
+			tradeChoice$autoSearchButton.setTooltip(null);
+		} else {
+			tradeChoice$autoSearchButton.setTooltip(Tooltip.create(Component.literal(tooltipMsg)));
+		}
+	}
+
+	@Unique
+	private Villager tradeChoice$findNearestVillager() {		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.level == null) return null;
 
 		List<Villager> villagers = mc.level.getEntitiesOfClass(
@@ -124,10 +207,13 @@ public abstract class MerchantScreenMixin extends AbstractContainerScreen<Mercha
 				closest = v;
 			}
 		}
+		return closest;
+	}
 
-		if (closest == null) return null;
-
-		Holder<VillagerProfession> profHolder = closest.getVillagerData().profession();
+	@Unique
+	private String tradeChoice$professionOf(Villager villager) {
+		if (villager == null) return null;
+		Holder<VillagerProfession> profHolder = villager.getVillagerData().profession();
 		Optional<ResourceKey<VillagerProfession>> keyOpt = profHolder.unwrapKey();
 		return keyOpt.map(k -> k.identifier().toString()).orElse(null);
 	}

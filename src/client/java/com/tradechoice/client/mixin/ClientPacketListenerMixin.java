@@ -1,10 +1,13 @@
 package com.tradechoice.client.mixin;
 
+import com.tradechoice.TradeChoiceMod;
 import com.tradechoice.client.TradeChoiceClient;
+import com.tradechoice.client.cycling.AutoSearchDriver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.Holder;
+import net.minecraft.network.protocol.game.ClientboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ClientboundMerchantOffersPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -32,6 +35,16 @@ public class ClientPacketListenerMixin {
 
 		MerchantOffers offers = packet.getOffers();
 		TradeChoiceClient.getAlertManager().checkAndAlert(offers, profession);
+		AutoSearchDriver.getInstance().notifyMerchantReplyReceived();
+	}
+
+	@Inject(method = "handleContainerClose", at = @At("HEAD"))
+	private void tradeChoice$onContainerClose(ClientboundContainerClosePacket packet, CallbackInfo ci) {
+		if (!AutoSearchDriver.getInstance().isRunning()) return;
+		Minecraft mc = Minecraft.getInstance();
+		TradeChoiceMod.LOGGER.warn(
+				"[trade-choice] Auto-search: ClientboundContainerClosePacket received while running; screen={}",
+				mc.gui.screen());
 	}
 
 	private static String tradeChoice$findNearestProfession(Minecraft mc) {

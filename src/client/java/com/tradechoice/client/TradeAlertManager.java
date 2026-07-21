@@ -18,6 +18,7 @@ public class TradeAlertManager {
 
 	private final TradeChoiceConfig config;
 	private boolean alertedThisOpen;
+	private boolean matchedSinceLastConsume;
 	private int lastOffersHash;
 
 	public TradeAlertManager(TradeChoiceConfig config) {
@@ -26,6 +27,7 @@ public class TradeAlertManager {
 
 	public void onScreenOpen() {
 		alertedThisOpen = false;
+		matchedSinceLastConsume = false;
 		lastOffersHash = 0;
 	}
 
@@ -43,13 +45,44 @@ public class TradeAlertManager {
 			ItemStack result = offer.getResult();
 			for (WantedTrade w : wanted) {
 				if (matchesItem(result, w)) {
+					WantedTrade found = createFromStack(profession, result);
+					TradeChoiceMod.LOGGER.info(
+							"[trade-choice] MATCH found: profession={} | wanted item={} enchId={} enchLvl={} | found item={} enchId={} enchLvl={}",
+							profession,
+							w.getItemId(),
+							w.getEnchantmentId() == null ? "<any>" : w.getEnchantmentId(),
+							w.getEnchantmentLevel() == 0 ? "<any>" : w.getEnchantmentLevel(),
+							found.getItemId(),
+							found.getEnchantmentId() == null ? "<none>" : found.getEnchantmentId(),
+							found.getEnchantmentLevel() == 0 ? "<none>" : found.getEnchantmentLevel());
 					playAlert();
 					alertedThisOpen = true;
+					matchedSinceLastConsume = true;
 					return true;
 				}
 			}
 		}
 		return false;
+	}
+
+	public void logWantedFor(String profession) {
+		List<WantedTrade> wanted = config.getChoicesForProfession(profession);
+		if (wanted.isEmpty()) {
+			TradeChoiceMod.LOGGER.info(
+					"[trade-choice] Auto-search target: profession={} marks=0 (no wanted entries)",
+					profession);
+			return;
+		}
+		TradeChoiceMod.LOGGER.info(
+				"[trade-choice] Auto-search target: profession={} marks={}",
+				profession, wanted.size());
+		for (WantedTrade w : wanted) {
+			TradeChoiceMod.LOGGER.info(
+					"[trade-choice]   - item={} enchId={} enchLvl={}",
+					w.getItemId(),
+					w.getEnchantmentId() == null ? "<any>" : w.getEnchantmentId(),
+					w.getEnchantmentLevel() == 0 ? "<any>" : w.getEnchantmentLevel());
+		}
 	}
 
 	public boolean isOfferMarked(MerchantOffer offer, String profession) {
@@ -61,6 +94,12 @@ public class TradeAlertManager {
 		WantedTrade trade = createFromStack(profession, offer.getResult());
 		config.toggle(trade);
 		TradeChoiceMod.LOGGER.info("[trade-choice] Toggled mark: profession={}, item={}", profession, trade.getItemId());
+	}
+
+	public boolean consumeRecentlyMatched() {
+		boolean result = matchedSinceLastConsume;
+		matchedSinceLastConsume = false;
+		return result;
 	}
 
 	public static WantedTrade createFromStack(String profession, ItemStack stack) {
