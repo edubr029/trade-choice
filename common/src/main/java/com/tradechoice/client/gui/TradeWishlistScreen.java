@@ -1,9 +1,13 @@
 package com.tradechoice.client.gui;
 
 import com.tradechoice.TradeChoiceMod;
+import com.tradechoice.client.TradeAlertManager;
 import com.tradechoice.client.TradeChoiceClient;
 import com.tradechoice.client.config.WantedTrade;
 import com.tradechoice.client.cycling.AutoSearchDriver;
+import com.tradechoice.client.fallback.VanillaTradeSnapshot;
+import com.tradechoice.client.fallback.VanillaTradeSnapshot.EnchantMeta;
+import com.tradechoice.client.fallback.VanillaTradeSnapshot.ItemEntry;
 import com.tradechoice.client.mixin.VillagerTradeAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -15,7 +19,7 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
@@ -23,6 +27,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.EnchantmentTags;
@@ -32,6 +37,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.item.trading.TradeSet;
 import net.minecraft.world.item.trading.VillagerTrade;
 
@@ -348,13 +355,22 @@ public class TradeWishlistScreen extends Screen {
 	}
 
 	/**
-	 * Populate entries from the TRADE_SET registry for this profession.
-	 * TRADE_SET is worldgen-scoped: it is NOT in the client-side
-	 * {@code mc.level.registryAccess()} (which only contains sync'd registries).
-	 * On integrated single-player the local {@link IntegratedServer} shares our
-	 * process and exposes the full worldgen registries via
-	 * {@code server.registryAccess()}; remote/dedicated servers do not, so we
-	 * surface a fallback message inside the panel instead of crashing.
+	 * Populate entries for this profession using a 3-tier resolution strategy:
+	 *
+	 * <ol>
+	 *   <li><b>Canonical:</b> the synced {@link RegistryAccess} from
+	 *       {@link Minecraft#getConnection()} via {@code ClientPacketListener.registryAccess()},
+	 *       last-resort {@code mc.level.registryAccess()}. On vanilla 26.2 dedicated servers,
+	 *       dynamic registries including TRADE_SET arrive via {@code ClientboundRegistryDataPacket}.</li>
+	 *   <li><b>Bundled vanilla snapshot:</b> if TRADE_SET is missing on this server (non-vanilla
+	 *       platform, older protocol, sync race), enumerate trades from a static snapshot of
+	 *       vanilla 26.2 trade sets shipped inside the JAR via {@link VanillaTradeSnapshot}.
+	 *       Trade-set keys are derived from {@code VillagerProfession#getTrades(level)} when the
+	 *       profession is available, otherwise constructed from {@code professionKey}.</li>
+	 *   <li><b>Live MerchantMenu offers:</b> if the snapshot has no entries for this profession
+	 *       either, fall back to enumerating the live villager's currently visible offers from
+	 *       {@link MerchantScreen#getMenu()}.</li>
+	 * </ol>
 	 */
 	private void buildEntries() {
 		Minecraft mc = Minecraft.getInstance();
@@ -362,16 +378,17 @@ public class TradeWishlistScreen extends Screen {
 		if (professionKey == null) return;
 
 		RegistryAccess regAccess = null;
-		if (mc.hasSingleplayerServer()) {
-			IntegratedServer server = mc.getSingleplayerServer();
-			if (server != null) regAccess = server.registryAccess();
+		ClientPacketListener conn = mc.getConnection();
+		if (conn != null) {
+			regAccess = conn.registryAccess();
 		}
 		if (regAccess == null) {
 			regAccess = mc.level.registryAccess();
 		}
 		if (regAccess == null) {
-			unavailable = true;
-			unavailableReason = "No registry access available.";
+			TradeChoiceMod.LOGGER.warn("[tradechoice] no client RegistryAccess; using bundled vanilla snapshot then MerchantMenu as fallbacks");
+			buildEntriesFromSnapshot(null);
+			if (entries.isEmpty()) buildEntriesFromMerchantMenuFallback();
 			return;
 		}
 
@@ -380,15 +397,23 @@ public class TradeWishlistScreen extends Screen {
 			profOpt = regAccess.lookupOrThrow(Registries.VILLAGER_PROFESSION)
 				.get(Identifier.tryParse(professionKey));
 		} catch (IllegalStateException e) {
-			TradeChoiceMod.LOGGER.warn("[tradechoice] VILLAGER_PROFESSION registry unavailable", e);
-			unavailable = true;
-			unavailableReason = "Profession registry not available on this server.";
+			TradeChoiceMod.LOGGER.warn("[tradechoice] VILLAGER_PROFESSION registry unavailable; using bundled vanilla snapshot then MerchantMenu as fallbacks", e);
+			buildEntriesFromSnapshot(null);
+			if (entries.isEmpty()) buildEntriesFromMerchantMenuFallback();
+			if (entries.isEmpty()) {
+				unavailable = true;
+				unavailableReason = "Profession registry not available on this server.";
+			}
 			return;
 		}
 		if (profOpt.isEmpty()) {
 			TradeChoiceMod.LOGGER.warn("[tradechoice] No villager profession found for key {}", professionKey);
-			unavailable = true;
-			unavailableReason = "Unknown profession: " + professionKey;
+			buildEntriesFromSnapshot(null);
+			if (entries.isEmpty()) buildEntriesFromMerchantMenuFallback();
+			if (entries.isEmpty()) {
+				unavailable = true;
+				unavailableReason = "Unknown profession: " + professionKey;
+			}
 			return;
 		}
 		VillagerProfession prof = profOpt.get().value();
@@ -397,9 +422,13 @@ public class TradeWishlistScreen extends Screen {
 		try {
 			tradeSetRegistry = regAccess.lookupOrThrow(Registries.TRADE_SET);
 		} catch (IllegalStateException e) {
-			TradeChoiceMod.LOGGER.warn("[tradechoice] TRADE_SET registry unavailable on this client", e);
-			unavailable = true;
-			unavailableReason = "Trade list registry not available on this server. Open the wishlist on a single-player world.";
+			TradeChoiceMod.LOGGER.warn("[tradechoice] TRADE_SET registry unavailable on this client; using bundled vanilla snapshot", e);
+			buildEntriesFromSnapshot(prof);
+			if (entries.isEmpty()) buildEntriesFromMerchantMenuFallback();
+			if (entries.isEmpty()) {
+				unavailable = true;
+				unavailableReason = "Trade list registry not available on this server and no vanilla snapshot matched.";
+			}
 			return;
 		}
 
@@ -459,6 +488,103 @@ public class TradeWishlistScreen extends Screen {
 					}
 				}
 			}
+		}
+	}
+
+	private void buildEntriesFromSnapshot(VillagerProfession profOrNull) {
+		Identifier profId = Identifier.tryParse(professionKey);
+		if (profId == null) {
+			TradeChoiceMod.LOGGER.warn("[tradechoice] snapshot fallback: cannot parse profession key {}", professionKey);
+			return;
+		}
+		if (!VanillaTradeSnapshot.isAvailable()) {
+			TradeChoiceMod.LOGGER.warn("[tradechoice] snapshot fallback: bundled vanilla_trades_26.2.json not available");
+			return;
+		}
+		String profBase = profId.toString();
+		List<EnchantMeta> tradeableEnchants = VanillaTradeSnapshot.getTradeableEnchants();
+		int before = entries.size();
+		for (int level = 1; level <= 5; level++) {
+			String snapshotKey;
+			if (profOrNull != null) {
+				ResourceKey<TradeSet> setKey = profOrNull.getTrades(level);
+				if (setKey == null) continue;
+				snapshotKey = setKey.identifier().toString();
+			} else {
+				snapshotKey = profBase + "/level_" + level;
+			}
+			List<ItemEntry> items = VanillaTradeSnapshot.getTradesForSet(snapshotKey);
+			if (items.isEmpty()) continue;
+			for (ItemEntry entry : items) {
+				String itemId = entry.itemId();
+				Identifier itemKey = Identifier.tryParse(itemId);
+				if (itemKey == null) continue;
+				Item item = BuiltInRegistries.ITEM.get(itemKey).map(Holder.Reference::value).orElse(null);
+				if (item == null) continue;
+				if (item == Items.ENCHANTED_BOOK) {
+					for (EnchantMeta em : tradeableEnchants) {
+						WantedTrade w = new WantedTrade(professionKey, itemId, em.id(), 0);
+						if (!entries.contains(w)) {
+							entries.add(w);
+							entryMaxLevels.add(em.maxLevel());
+						}
+					}
+				} else {
+					WantedTrade w = new WantedTrade(professionKey, itemId, null, 0);
+					if (!entries.contains(w)) {
+						entries.add(w);
+						entryMaxLevels.add(1);
+					}
+				}
+			}
+		}
+		int added = entries.size() - before;
+		TradeChoiceMod.LOGGER.info("[tradechoice] snapshot fallback populated {} entries for profession={}", added, professionKey);
+	}
+
+	private void buildEntriesFromMerchantMenuFallback() {
+		if (parent == null) {
+			unavailable = true;
+			unavailableReason = "Wishlist panel opened outside the villager trade screen; no fallback enumeration source.";
+			return;
+		}
+		MerchantMenu menu = parent.getMenu();
+		MerchantOffers offers = menu.getOffers();
+		if (offers.isEmpty()) {
+			unavailable = true;
+			unavailableReason = "This villager has no offered trades to enumerate (try opening the wishlist after a villager has unlocked some levels).";
+			return;
+		}
+		// Snapshot enchant metadata is used to recover real max levels; falls back to 1
+		// for enchants not present in vanilla 26.2's tradeable tag (modded enchants,
+		// non-tradeable vanilla enchants).
+		List<EnchantMeta> snapshotEnchants = VanillaTradeSnapshot.isAvailable()
+				? VanillaTradeSnapshot.getTradeableEnchants()
+				: List.of();
+		int added = 0;
+		for (MerchantOffer offer : offers) {
+			WantedTrade raw = TradeAlertManager.createFromStack(professionKey, offer.getResult());
+			int maxLvl = 1;
+			if (raw.getEnchantmentId() != null) {
+				for (EnchantMeta em : snapshotEnchants) {
+					if (em.id().equals(raw.getEnchantmentId())) {
+						maxLvl = em.maxLevel();
+						break;
+					}
+				}
+			}
+			// Collapse enchant level to 0 so multiple offers of the same enchantment
+			// dedupe to a single wishlist row (matches canonical + snapshot paths).
+			WantedTrade w = new WantedTrade(raw.getProfession(), raw.getItemId(), raw.getEnchantmentId(), 0);
+			if (!entries.contains(w)) {
+				entries.add(w);
+				entryMaxLevels.add(maxLvl);
+				added++;
+			}
+		}
+		if (added == 0) {
+			unavailable = true;
+			unavailableReason = "All of this villager's offers are already in your wishlist.";
 		}
 	}
 
