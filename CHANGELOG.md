@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-22
+
+### Added
+- Bundled vanilla 26.2 trade snapshot inside the JAR (`assets/tradechoice/fallback/vanilla_trades_26.2.json`) — covers all 13 villager professions across 5 levels + 3 wandering-trader profiles (68 trade sets) and the 40 enchantments in vanilla's `tradeable` enchantment tag, each annotated with `max_level`.
+- New `VanillaTradeSnapshot` loader (lazy singleton, double-checked locking) for accessing the bundled snapshot data via the classpath resource.
+- Three-tier fallback resolution in `TradeWishlistScreen.buildEntries()`: canonical TRADE_SET registry lookup → bundled vanilla snapshot → live `MerchantMenu` offers as last resort.
+
+### Fixed
+- Multiplayer crash on dedicated servers that don't sync the TRADE_SET dynamic registry to clients (e.g., `non-vanilla dedicated server`). The Wanted trade panel previously threw `IllegalStateException: Missing registry: ResourceKey[minecraft:root / minecraft:trade_set]` on non-vanilla servers; it now degrades gracefully through the bundled snapshot.
+- Tier-3 `MerchantMenu` fallback deduplication: multiple live offers of the same enchantment at different levels (e.g., Efficiency I / II / III) no longer render as duplicate wishlist rows — enchant levels collapse to `0` for `WantedTrade` equality, matching the canonical and snapshot paths.
+- Tier-3 `MerchantMenu` fallback enchantment picker: `entryMaxLevels` now look up the enchantment's real maximum level from the bundled snapshot instead of being hardcoded to `1`, so the level picker on enchantment rows renders the correct range.
+
 ## [1.0.0] - 2026-07-21
 
 ### Added
