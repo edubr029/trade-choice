@@ -10,6 +10,7 @@
     "sources": "https://github.com/edubr029/trade-choice"
   },
   "license": "MIT",
+  "icon": "assets/tradechoice/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": ["com.tradechoice.client.TradeChoiceFabricClient"]

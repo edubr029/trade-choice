@@ -10,6 +10,7 @@ description="Mark wanted villager trades and get audio alerts when matching offe
 authors="edubr029"
 contact.homepage="https://modrinth.com/mod/trade-choice"
 contact.sources="https://github.com/edubr029/trade-choice"
+logoFile="assets/tradechoice/icon.png"
 
 [[mixins]]
 config = "tradechoice.client.mixins.json"
